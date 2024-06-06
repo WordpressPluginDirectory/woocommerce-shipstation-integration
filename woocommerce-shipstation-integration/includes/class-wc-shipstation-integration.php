@@ -1,7 +1,12 @@
 <?php
+/**
+ * Class WC_ShipStation_Integration file.
+ *
+ * @package WC_ShipStation
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit; // Exit if accessed directly
+	exit; // Exit if accessed directly.
 }
 
 use WooCommerce\ShipStation\Order_Util;
@@ -12,10 +17,34 @@ use WooCommerce\ShipStation\Order_Util;
 class WC_ShipStation_Integration extends WC_Integration {
 	use Order_Util;
 
-	public static $auth_key        = null;
+	/**
+	 * Authorization key for ShipStation API.
+	 *
+	 * @var string
+	 */
+	public static $auth_key = null;
+
+	/**
+	 * Export statuses.
+	 *
+	 * @var array
+	 */
 	public static $export_statuses = array();
+
+	/**
+	 * Flag for logging feature.
+	 * `true` means log feature is on.
+	 *
+	 * @var boolean
+	 */
 	public static $logging_enabled = true;
-	public static $shipped_status  = null;
+
+	/**
+	 * Shipment status.
+	 *
+	 * @var string
+	 */
+	public static $shipped_status = null;
 
 	/**
 	 * Constructor
@@ -29,31 +58,32 @@ class WC_ShipStation_Integration extends WC_Integration {
 			update_option( 'woocommerce_shipstation_auth_key', $this->generate_key() );
 		}
 
-		// Load admin form
+		// Load admin form.
 		$this->init_form_fields();
 
-		// Load settings
+		// Load settings.
 		$this->init_settings();
 
-		self::$auth_key             = get_option( 'woocommerce_shipstation_auth_key', false );
-		self::$export_statuses      = $this->get_option( 'export_statuses', array( 'wc-processing', 'wc-on-hold', 'wc-completed', 'wc-cancelled' ) );
-		self::$logging_enabled      = 'yes' === $this->get_option( 'logging_enabled', 'yes' );
-		self::$shipped_status       = $this->get_option( 'shipped_status', 'wc-completed' );
+		self::$auth_key        = get_option( 'woocommerce_shipstation_auth_key', false );
+		self::$export_statuses = $this->get_option( 'export_statuses', array( 'wc-processing', 'wc-on-hold', 'wc-completed', 'wc-cancelled' ) );
+		self::$logging_enabled = 'yes' === $this->get_option( 'logging_enabled', 'yes' );
+		self::$shipped_status  = $this->get_option( 'shipped_status', 'wc-completed' );
 
-		// Force saved value
+		// Force saved .
 		$this->settings['auth_key'] = self::$auth_key;
 
-		// Hooks
+		// Hooks.
 		add_action( 'woocommerce_update_options_integration_shipstation', array( $this, 'process_admin_options' ) );
 		add_filter( 'woocommerce_subscriptions_renewal_order_meta_query', array( $this, 'subscriptions_renewal_order_meta_query' ), 10, 4 );
 		add_action( 'wp_loaded', array( $this, 'hide_notices' ) );
 		add_filter( 'woocommerce_translations_updates_for_woocommerce_shipstation_integration', '__return_true' );
 
-		$hide_notice = get_option( 'wc_shipstation_hide_activate_notice', '' );
+		$hide_notice               = get_option( 'wc_shipstation_hide_activate_notice', '' );
 		$settings_notice_dismissed = get_user_meta( get_current_user_id(), 'dismissed_shipstation-setup_notice' );
 
+		// phpcs:ignore WordPress.WP.Capabilities.Unknown --- It's native capability from WooCommerce
 		if ( current_user_can( 'manage_woocommerce' ) && ( 'yes' !== $hide_notice && ! $settings_notice_dismissed ) ) {
-			if ( ! isset( $_GET['wc-shipstation-hide-notice'] ) ) {
+			if ( ! isset( $_GET['wc-shipstation-hide-notice'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended --- No need to use nonce as no DB operation
 				add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 				add_action( 'admin_notices', array( $this, 'settings_notice' ) );
 			}
@@ -108,15 +138,16 @@ class WC_ShipStation_Integration extends WC_Integration {
 	 * Enqueue admin scripts/styles
 	 */
 	public function enqueue_scripts() {
-		wp_enqueue_style( 'shipstation-admin', plugins_url( 'assets/css/admin.css', dirname( __FILE__ ) ) );
+		wp_enqueue_style( 'shipstation-admin', plugins_url( 'assets/css/admin.css', WC_SHIPSTATION_FILE ), array(), WC_SHIPSTATION_VERSION );
 	}
 
 	/**
-	 * Generate a key
+	 * Generate a key.
+	 *
 	 * @return string
 	 */
 	public function generate_key() {
-		$to_hash = get_current_user_id() . date( 'U' ) . mt_rand();
+		$to_hash = get_current_user_id() . wp_date( 'U' ) . wp_rand();
 		return 'WCSS-' . hash_hmac( 'md5', $to_hash, wp_hash( $to_hash ) );
 	}
 
@@ -124,19 +155,21 @@ class WC_ShipStation_Integration extends WC_Integration {
 	 * Init integration form fields
 	 */
 	public function init_form_fields() {
-		$this->form_fields = include( 'data/data-settings.php' );
+		$this->form_fields = include WC_SHIPSTATION_ABSPATH . 'includes/data/data-settings.php';
 	}
 
 	/**
 	 * Prevents WooCommerce Subscriptions from copying across certain meta keys to renewal orders.
-	 * @param  array $order_meta_query
-	 * @param  int $original_order_id
-	 * @param  int $renewal_order_id
-	 * @param  string $new_order_role
+	 *
+	 * @param array  $order_meta_query Order meta query.
+	 * @param int    $original_order_id Original order ID.
+	 * @param int    $renewal_order_id Order ID after being renewed.
+	 * @param string $new_order_role New order role.
+	 *
 	 * @return array
 	 */
 	public function subscriptions_renewal_order_meta_query( $order_meta_query, $original_order_id, $renewal_order_id, $new_order_role ) {
-		if ( 'parent' == $new_order_role ) {
+		if ( 'parent' === $new_order_role ) {
 			$order_meta_query .= ' AND `meta_key` NOT IN ('
 							. "'_tracking_provider', "
 							. "'_tracking_number', "
@@ -161,6 +194,7 @@ class WC_ShipStation_Integration extends WC_Integration {
 				wp_die( esc_html__( 'Action failed. Please refresh the page and retry.', 'woocommerce-shipstation-integration' ) );
 			}
 
+			// phpcs:ignore WordPress.WP.Capabilities.Unknown --- It's native capability from WooCommerce
 			if ( ! current_user_can( 'manage_woocommerce' ) ) {
 				wp_die( esc_html__( 'Cheatin&#8217; huh?', 'woocommerce-shipstation-integration' ) );
 			}
@@ -173,6 +207,7 @@ class WC_ShipStation_Integration extends WC_Integration {
 	 * Settings prompt
 	 */
 	public function settings_notice() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended --- No need to use nonce as no DB operation
 		if ( ! empty( $_GET['tab'] ) && 'integration' === $_GET['tab'] ) {
 			return;
 		}
@@ -180,7 +215,7 @@ class WC_ShipStation_Integration extends WC_Integration {
 		$logo_title = __( 'ShipStation logo', 'woocommerce-shipstation-integration' );
 		?>
 		<div class="notice notice-warning">
-			<img class="shipstation-logo" alt="<?php echo esc_attr( $logo_title ); ?>" title="<?php echo esc_attr( $logo_title ); ?>" src="<?php echo esc_url( plugins_url( 'assets/images/shipstation-logo-blue.png', dirname( __FILE__ ) ) ); ?>" />
+			<img class="shipstation-logo" alt="<?php echo esc_attr( $logo_title ); ?>" title="<?php echo esc_attr( $logo_title ); ?>" src="<?php echo esc_url( plugins_url( 'assets/images/shipstation-logo-blue.png', __DIR__ ) ); ?>" />
 			<a class="woocommerce-message-close notice-dismiss woocommerce-shipstation-activation-notice-dismiss" href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'wc-shipstation-hide-notice', '' ), 'wc_shipstation_hide_notices_nonce', '_wc_shipstation_notice_nonce' ) ); ?>"></a>
 			<p>
 				<?php

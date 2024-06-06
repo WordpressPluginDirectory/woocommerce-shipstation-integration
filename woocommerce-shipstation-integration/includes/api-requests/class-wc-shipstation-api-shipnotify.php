@@ -1,4 +1,9 @@
 <?php
+/**
+ * WC_Shipstation_API_Shipnotify file.
+ *
+ * @package WC_ShipStation
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
@@ -32,7 +37,7 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 
 			$product = is_callable( array( $item, 'get_product' ) ) ? $item->get_product() : false;
 
-			if ( is_a( $product, 'WC_Product' ) && $product->needs_shipping() ) {
+			if ( ( $product instanceof WC_Product ) && $product->needs_shipping() ) {
 				$needs_shipping += ( $item['qty'] - abs( $order->get_qty_refunded_for_item( $item_id ) ) );
 			}
 		}
@@ -100,6 +105,21 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 			$order_id = $order_number;
 		}
 
+		/**
+		 * This order number can be adjusted by using a filter which is done by the
+		 * Sequential Order Numbers / Sequential Order Numbers Pro plugins. However
+		 * there are also many other plugins which offer this functionality.
+		 *
+		 * When the ShipNotify request is received the "real" order number is
+		 * needed to be able to update the correct order. The plugin uses the
+		 * function get_order_id. This function has specific compatibility for both
+		 * Sequential Order Numbers & Sequential Order Numbers Pro. However there
+		 * is no additional filter for plugins to modify this order ID if needed.
+		 *
+		 * @param int Order ID.
+		 *
+		 * @since 4.1.6
+		 */
 		return apply_filters( 'woocommerce_shipstation_get_order_id', absint( $order_id ) );
 	}
 
@@ -139,10 +159,11 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 	 * @version 4.1.18
 	 */
 	public function request() {
-
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase --- ShipStation provides an object with camelCase properties and method
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended --- Using WC_ShipStation_Integration::$auth_key for security verification
 		$this->validate_input( array( 'order_number', 'carrier' ) );
 
-		$timestamp          = current_time( 'timestamp' );
+		$timestamp          = wp_date( 'U' );
 		$shipstation_xml    = file_get_contents( 'php://input' );
 		$shipped_items      = array();
 		$shipped_item_count = 0;
@@ -168,7 +189,7 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 			// information might help figuring out the culprit.
 			//
 			// @see https://github.com/woocommerce/woocommerce-shipstation/issues/80.
-			$this->log( '$_REQUEST: ' . print_r( $obfuscated_request, true ) );
+			$this->log( '$_REQUEST: ' . print_r( $obfuscated_request, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
 		}
 
 		if ( ! function_exists( 'simplexml_import_dom' ) ) {
@@ -176,14 +197,17 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 			$this->log( __( 'Missing SimpleXML extension for parsing ShipStation XML.', 'woocommerce-shipstation-integration' ) );
 		}
 
+		$order_number = isset( $_GET['order_number'] ) ? wc_clean( wp_unslash( $_GET['order_number'] ) ) : '0';
+
 		// Try to parse XML first since it can contain the real OrderID.
 		if ( $can_parse_xml ) {
-			$this->log( __( 'ShipNotify XML: ', 'woocommerce-shipstation-integration' ) . print_r( $shipstation_xml, true ) );
+			$this->log( __( 'ShipNotify XML: ', 'woocommerce-shipstation-integration' ) . print_r( $shipstation_xml, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
 
-			$xml = $this->get_parsed_xml( $shipstation_xml );
-
-			if ( ! $xml ) {
-				$this->log( __( 'Cannot parse XML', 'woocommerce-shipstation-integration' ) );
+			try {
+				$xml = $this->get_parsed_xml( $shipstation_xml );
+			} catch ( Exception $e ) {
+				// translators: %s is an error message.
+				$this->log( sprintf( __( 'Cannot parse XML : %s', 'woocommerce-shipstation-integration' ), $e->getMessage() ) );
 				status_header( 500 );
 			}
 
@@ -191,15 +215,15 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 				$timestamp = strtotime( (string) $xml->ShipDate );
 			}
 
-			if ( isset( $xml->OrderID ) && $_GET['order_number'] !== (string) $xml->OrderID ) {
+			if ( isset( $xml->OrderID ) && $order_number !== (string) $xml->OrderID ) {
 				$xml_order_id = (int) $xml->OrderID;
 			}
 		}
 
 		// Get real order ID from XML otherwise try to convert it from the order number.
-		$order_id        = ! $xml_order_id ? $this->get_order_id( wc_clean( $_GET['order_number'] ) ) : $xml_order_id;
-		$tracking_number = empty( $_GET['tracking_number'] ) ? '' : wc_clean( $_GET['tracking_number'] );
-		$carrier         = empty( $_GET['carrier'] ) ? '' : wc_clean( $_GET['carrier'] );
+		$order_id        = ! $xml_order_id ? $this->get_order_id( $order_number ) : $xml_order_id;
+		$tracking_number = empty( $_GET['tracking_number'] ) ? '' : wc_clean( wp_unslash( $_GET['tracking_number'] ) );
+		$carrier         = empty( $_GET['carrier'] ) ? '' : wc_clean( wp_unslash( $_GET['carrier'] ) );
 		$order           = wc_get_order( $order_id );
 
 		if ( false === $order || ! is_object( $order ) ) {
@@ -221,7 +245,7 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 			$items = $xml->Items;
 			if ( $items ) {
 				foreach ( $items->Item as $item ) {
-					$this->log( __( 'ShipNotify Item: ', 'woocommerce-shipstation-integration' ) . print_r( $item, true ) );
+					$this->log( __( 'ShipNotify Item: ', 'woocommerce-shipstation-integration' ) . print_r( $item, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
 
 					$item_sku    = wc_clean( (string) $item->SKU );
 					$item_name   = wc_clean( (string) $item->Name );
@@ -249,7 +273,7 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 
 		// If we have a list of shipped items, we can customise the note + see
 		// if the order is not yet complete.
-		if ( sizeof( $shipped_items ) > 0 ) {
+		if ( count( $shipped_items ) > 0 ) {
 			$order_note = sprintf(
 				/* translators: 1) shipped items 2) carrier's name 3) shipped date, 4) tracking number */
 				__( '%1$s shipped via %2$s on %3$s with tracking number %4$s.', 'woocommerce-shipstation-integration' ),
@@ -276,7 +300,7 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 			);
 
 			$order->update_meta_data( '_shipstation_shipped_item_count', $current_shipped_items + $shipped_item_count );
-			$order->save();
+			$order->save_meta_data();
 		} else {
 			// If we don't have items from SS and order items in WC, or cannot parse
 			// the XML, just complete the order as a whole.
@@ -305,7 +329,7 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 				$order->update_meta_data( '_tracking_provider', strtolower( $carrier ) );
 				$order->update_meta_data( '_tracking_number', $tracking_number );
 				$order->update_meta_data( '_date_shipped', $timestamp );
-				$order->save();
+				$order->save_meta_data();
 			}
 
 			$is_customer_note = 0;
@@ -323,7 +347,11 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 			$this->log( sprintf( __( 'Updated order %1$s to status %2$s', 'woocommerce-shipstation-integration' ), $order_id, WC_ShipStation_Integration::$shipped_status ) );
 		}
 
-		// Trigger action for other integrations.
+		/**
+		 * Trigger action for other integrations.
+		 *
+		 * @since 4.0.1
+		 */
 		do_action(
 			'woocommerce_shipstation_shipnotify',
 			$order,
@@ -336,6 +364,8 @@ class WC_Shipstation_API_Shipnotify extends WC_Shipstation_API_Request {
 		);
 
 		status_header( 200 );
+		// phpcs:enable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 	}
 }
 

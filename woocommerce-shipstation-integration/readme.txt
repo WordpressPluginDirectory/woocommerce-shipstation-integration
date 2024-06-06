@@ -1,12 +1,13 @@
 === WooCommerce ShipStation Integration ===
 Contributors: woocommerce, automattic, royho, akeda, mattyza, bor0, woothemes, dwainm, laurendavissmith001
 Tags: shipping, woocommerce, automattic
-Requires at least: 4.4.0
-Tested up to: 6.2
-WC tested up to: 7.6.1
-WC requires at least: 3.4.0
-Requires PHP: 5.6
-Stable tag: 4.3.9
+Requires at least: 6.3
+Tested up to: 6.5
+WC tested up to: 8.9
+WC requires at least: 8.7
+Requires PHP: 7.4
+Requires Plugins: woocommerce
+Stable tag: 4.4.3
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -47,6 +48,18 @@ For help setting up and configuring, please refer to our [user guide](https://do
 If you get stuck, you can ask for help in the Plugin Forum.
 
 == Changelog ==
+
+= 4.4.3 - 2024-05-27 =
+* Tweak - Performance enhancement.
+
+= 4.4.2 - 2024-04-09 =
+* Fix - Cannot retrieve order number on from GET variable.
+
+= 4.4.1 - 2024-03-25 =
+* Tweak - WordPress 6.5 compatibility.
+
+= 4.4.0 - 2024-03-19 =
+* Fix - Applying WordPress coding standards.
 
 = 4.3.9 - 2023-09-05 =
 * Fix - Security updates.

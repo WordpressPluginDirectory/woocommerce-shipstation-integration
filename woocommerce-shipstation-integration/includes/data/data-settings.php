@@ -1,22 +1,29 @@
 <?php
+/**
+ * Data for the settings page file.
+ *
+ * @package WC_ShipStation
+ */
 
 $statuses = wc_get_order_statuses();
 
 // When integration loaded custom statuses is not loaded yet, so we need to
 // merge it manually.
 if ( function_exists( 'wc_order_status_manager' ) ) {
-	$query = new WP_Query( array(
-		'post_type'        => 'wc_order_status',
-		'post_status'      => 'publish',
-		'posts_per_page'   => -1,
-		'suppress_filters' => 1,
-		'orderby'          => 'menu_order',
-		'order'            => 'ASC',
-	) );
+	$query = new WP_Query(
+		array(
+			'post_type'        => 'wc_order_status',
+			'post_status'      => 'publish',
+			'posts_per_page'   => -1,
+			'suppress_filters' => 1,
+			'orderby'          => 'menu_order',
+			'order'            => 'ASC',
+		)
+	);
 
 	$filtered_statuses = array();
-	foreach ( $query->posts as $status ) {
-		$filtered_statuses[ 'wc-' . $status->post_name ] = $status->post_title;
+	foreach ( $query->posts as $post_status ) {
+		$filtered_statuses[ 'wc-' . $post_status->post_name ] = $post_status->post_title;
 	}
 	$statuses = array_merge( $statuses, $filtered_statuses );
 
@@ -28,16 +35,16 @@ foreach ( $statuses as $key => $value ) {
 }
 
 $fields = array(
-	'auth_key' => array(
-		'title'       => __( 'Authentication Key', 'woocommerce-shipstation-integration' ),
-		'description' => __( 'Copy and paste this key into ShipStation during setup.', 'woocommerce-shipstation-integration' ),
-		'default'     => '',
-		'type'        => 'text',
-		'desc_tip'    => __( 'This is the <code>Auth Key</code> you set in ShipStation and allows ShipStation to communicate with your store.', 'woocommerce-shipstation-integration' ),
+	'auth_key'        => array(
+		'title'             => __( 'Authentication Key', 'woocommerce-shipstation-integration' ),
+		'description'       => __( 'Copy and paste this key into ShipStation during setup.', 'woocommerce-shipstation-integration' ),
+		'default'           => '',
+		'type'              => 'text',
+		'desc_tip'          => __( 'This is the <code>Auth Key</code> you set in ShipStation and allows ShipStation to communicate with your store.', 'woocommerce-shipstation-integration' ),
 		'custom_attributes' => array(
 			'readonly' => 'readonly',
 		),
-		'value'        => WC_ShipStation_Integration::$auth_key,
+		'value'             => WC_ShipStation_Integration::$auth_key,
 	),
 	'export_statuses' => array(
 		'title'             => __( 'Export Order Statuses&hellip;', 'woocommerce-shipstation-integration' ),
@@ -51,7 +58,7 @@ $fields = array(
 			'data-placeholder' => __( 'Select Order Statuses', 'woocommerce-shipstation-integration' ),
 		),
 	),
-	'shipped_status' => array(
+	'shipped_status'  => array(
 		'title'       => __( 'Shipped Order Status&hellip;', 'woocommerce-shipstation-integration' ),
 		'type'        => 'select',
 		'options'     => $statuses,

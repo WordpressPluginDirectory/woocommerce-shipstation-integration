@@ -1,12 +1,22 @@
 <?php
+/**
+ * Class WC_ShipStation_Privacy file.
+ *
+ * @package WC_ShipStation
+ */
+
 if ( ! class_exists( 'WC_Abstract_Privacy' ) ) {
 	return;
 }
 
+/**
+ * A class to maintain privacy.
+ *
+ * @package WC_ShipStation
+ */
 class WC_ShipStation_Privacy extends WC_Abstract_Privacy {
 	/**
 	 * Constructor
-	 *
 	 */
 	public function __construct() {
 		parent::__construct( __( 'ShipStation', 'woocommerce-shipstation-integration' ) );
@@ -19,17 +29,17 @@ class WC_ShipStation_Privacy extends WC_Abstract_Privacy {
 	/**
 	 * Returns a list of orders.
 	 *
-	 * @param string  $email_address
-	 * @param int     $page
+	 * @param string $email_address Email address.
+	 * @param int    $page Current page number in pagination.
 	 *
 	 * @return WC_Order[]
 	 */
 	protected function get_orders( $email_address, $page ) {
 		$user = get_user_by( 'email', $email_address ); // Check if user has an ID in the DB to load stored personal data.
 
-		$order_query    = array(
-			'limit'          => 10,
-			'page'           => $page,
+		$order_query = array(
+			'limit' => 10,
+			'page'  => $page,
 		);
 
 		if ( $user instanceof WP_User ) {
@@ -43,7 +53,6 @@ class WC_ShipStation_Privacy extends WC_Abstract_Privacy {
 
 	/**
 	 * Gets the message of the privacy to display.
-	 *
 	 */
 	public function get_privacy_message() {
 		/* translators: 1: URL to documentation */
@@ -83,7 +92,7 @@ class WC_ShipStation_Privacy extends WC_Abstract_Privacy {
 						),
 						array(
 							'name'  => __( 'ShipStation date shipped', 'woocommerce-shipstation-integration' ),
-							'value' => $order->get_meta( '_date_shipped', true ) ? date( 'Y-m-d H:i:s', $order->get_meta( '_date_shipped', true ) ) : '',
+							'value' => $order->get_meta( '_date_shipped', true ) ? wp_date( 'Y-m-d H:i:s', $order->get_meta( '_date_shipped', true ) ) : '',
 						),
 					),
 				);
@@ -117,12 +126,13 @@ class WC_ShipStation_Privacy extends WC_Abstract_Privacy {
 			$order = wc_get_order( $order->get_id() );
 
 			list( $removed, $retained, $msgs ) = $this->maybe_handle_order( $order );
+
 			$items_removed  |= $removed;
 			$items_retained |= $retained;
 			$messages        = array_merge( $messages, $msgs );
 		}
 
-		// Tell core if we have more orders to work on still
+		// Tell core if we have more orders to work on still.
 		$done = count( $orders ) < 10;
 
 		return array(
@@ -136,7 +146,8 @@ class WC_ShipStation_Privacy extends WC_Abstract_Privacy {
 	/**
 	 * Handle eraser of data tied to Orders
 	 *
-	 * @param WC_Order $order
+	 * @param WC_Order $order Order object.
+	 *
 	 * @return array
 	 */
 	protected function maybe_handle_order( $order ) {
@@ -156,7 +167,7 @@ class WC_ShipStation_Privacy extends WC_Abstract_Privacy {
 		$order->delete_meta_data( '_tracking_number' );
 		$order->delete_meta_data( '_date_shipped' );
 		$order->delete_meta_data( '_shipstation_exported' );
-		$order->save();
+		$order->save_meta_data();
 
 		return array( true, false, array( __( 'ShipStation Order Data Erased.', 'woocommerce-shipstation-integration' ) ) );
 	}
